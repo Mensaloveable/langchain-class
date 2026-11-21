@@ -1,5 +1,5 @@
 from typing import List
-
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.tools import tool
@@ -19,7 +19,18 @@ class Source(BaseModel):
     Attributes:
         url (str): The URL of the source.
     """
-    url: str = Field(..., description="The URL of the source.")
+    url: str = Field(description="The URL of the source.")
+
+class AgentResponse(BaseModel):
+    """
+    Schema for an agent's response with answer and sources.
+    
+    Attributes:
+        content (str): The content of the response.
+        sources (List[Source]): A list of sources used in the response.
+    """
+    answer: str = Field(description="The agent's answer to the query.")
+    sources: List[Source] = Field(default_factory=list, description="A list of sources used in the response.")
     
 @tool
 def search_demo(query: str) -> str:
@@ -36,9 +47,9 @@ def search_demo(query: str) -> str:
     print(f"Searching for: {query} ...")
     return tavily_client.search(query=query)
 
-llm = ChatOllama(model="gemma4:12b")
+llm = ChatOllama(model="devstral-small-2")
 tools = [TavilySearch(), search_demo]
-agent = create_agent(model=llm, tools=tools)
+agent = create_agent(model=llm, tools=tools, response_format=AgentResponse)
 
 def main() -> None:
     print("Hello from langchain-tutorial!")
