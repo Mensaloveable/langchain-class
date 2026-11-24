@@ -1,3 +1,5 @@
+import logging
+
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain.tools import tool
@@ -54,7 +56,59 @@ def run_agent(question: str):
     llm = init_chat_model(f"ollama: {MODEL}", temperature=0.0)
     llm_with_tools = llm.with_tools(tools)
     
-    logging.info(f"Question: {question}")
+    print(f"Question: {question}")
+    
+    messages = [
+        SystemMessage(
+            content=(
+                "You are a helpful assistant that can answer questions about product prices "
+                "and apply discount tiers to calculate the final price. "
+                "You have access to the following tools: "
+                "1. get_product_price(product: str) -> float: Look up the price of a product in the catalog. "
+                "2. get_discounted_price(price: float, discount_tier: str) -> float: Apply a discount tier to a price and return the final price. "
+                "Available discount tiers: bronze, silver, gold.\n\n"
+                "STRICT RULES: you must follow these exactly:\n"
+                "1. Never guess or assume any product price."
+                "You must call get_product_price first to get the real price.\n"
+                "2. Only call apply_discount after you have received a price from get product price."
+                "Pass the price returned by get_product price - do NOT Pass made-up number."
+                "3. Never calculate discounts yourself using math"
+                "Always use the apply_discount tool.\n"
+                "4. If the user does not specify a discount tier,"
+                "ask them which tier to use. Do not assume one"
+            )
+        ),
+        HumanMessage(content=question),
+    ]
+    
+    for iteration in range(MAX_ITERATIONS):
+        print(f"\n--- Iteration {iteration + 1} ---")
+        
+        ai_message = llm_with_tools(messages)
+        
+        tool_call = ai_message.tool_calls
+        
+        # If the AI has no tool calls, it means it has generated a final answer
+        if not tool_call:
+            print("No tool call detected. Final answer:")
+            print(ai_message.content)
+            return ai_message.content
+        
+        #  process only the first tool call - force one tool call per iteration
+        tool_call = tool_call[0]
+        tool_name = tool_call.name
+        tool_args = tool_call.get("args", {})
+        tool_call_id = tool_call.id
+        
+        logging.info(f"Tool selected: {tool_name} with args: {tool_args}")
+        
+        tool_to_call = tools_dict.get(tool_name)
+        if tool_to_call is None:
+            raise ValueError(f"Tool '{tool_name}' not found.")
+        
+        observation = tool_to_call.invoke(**tool_args)
+        
+        logging.info(f"Observation from tool '{tool_name}': {observation}")
 
 
 if __name__ == "__main__":
