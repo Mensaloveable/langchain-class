@@ -106,7 +106,7 @@ def ollama_chat(messages):
 
 
 #  --- Agent Loop ---
-@traceable(name="LangChain Agent Loop")
+@traceable(name="Ollama Agent Loop")
 def run_agent(question: str):
 
     tools_dict = {
