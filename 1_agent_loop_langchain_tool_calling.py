@@ -51,12 +51,19 @@ def get_discounted_price(price: float, discount_tier: str) -> float:
 @traceable(name="LangChain Agent Loop")
 def run_agent(question: str):
     tools = [get_product_price, get_discounted_price]
+    
+    print(f"$$$$$$$$$$$$$get_product_price: {get_product_price}\n\n")
+    
+    logging.info(f"Available tools: {[tool.name for tool in tools]}")
+    print(f"Available tools: {[tool.name for tool in tools]}")
+
     tools_dict = {tool.name: tool for tool in tools}
+    print(f"$$$$$$$$$$$$$tools_dict: {tools_dict}\n\n")
     
     llm = init_chat_model(f"ollama: {MODEL}", temperature=0.0)
-    llm_with_tools = llm.with_tools(tools)
+    llm_with_tools = llm.bind_tools(tools)
     
-    print(f"Question: {question}")
+    logging.info(f"~~~~~~Question~~~~~~: {question}")
     
     messages = [
         SystemMessage(
@@ -84,31 +91,53 @@ def run_agent(question: str):
     for iteration in range(MAX_ITERATIONS):
         print(f"\n--- Iteration {iteration + 1} ---")
         
-        ai_message = llm_with_tools(messages)
+        ai_message = llm_with_tools.invoke(messages)
         
-        tool_call = ai_message.tool_calls
+        # Add the assistant's response to the message history
+        messages.append(ai_message)
+        print(f"~~~~~~~Message: {messages}")
+        print('#######################################################################################\n\n')
+        
+        tool_calls = ai_message.tool_calls
+        print(f"~~~~~~~tool_calls: {tool_calls}\n\n")
         
         # If the AI has no tool calls, it means it has generated a final answer
-        if not tool_call:
+        if not tool_calls:
             print("No tool call detected. Final answer:")
-            print(ai_message.content)
+            print('~~~~~~~ai_message.content', ai_message.content)
             return ai_message.content
         
         #  process only the first tool call - force one tool call per iteration
-        tool_call = tool_call[0]
-        tool_name = tool_call.name
+        tool_call = tool_calls[0]
+        tool_name = tool_call.get("name")
         tool_args = tool_call.get("args", {})
-        tool_call_id = tool_call.id
+        tool_call_id = tool_call.get("id")
         
         logging.info(f"Tool selected: {tool_name} with args: {tool_args}")
+        print(f"Tool selected: {tool_name} with args: {tool_args}")
         
         tool_to_call = tools_dict.get(tool_name)
         if tool_to_call is None:
             raise ValueError(f"Tool '{tool_name}' not found.")
         
-        observation = tool_to_call.invoke(**tool_args)
-        
+        observation = tool_to_call.invoke(tool_args)
+         
         logging.info(f"Observation from tool '{tool_name}': {observation}")
+        print(f"Observation from tool '{tool_name}': {observation}")
+         
+         # Add the tool output to the message history
+        
+        messages.append(ai_message)
+        messages.append(ToolMessage(
+            content=str(observation),
+            tool_call_id=tool_call_id
+        ))
+        
+        # Log error if the maximum number of iterations is reached and the agent has not produced a final answer
+        if iteration == MAX_ITERATIONS - 1:
+            logging.error("Maximum iterations reached without producing a final answer.")
+            print("Maximum iterations reached without producing a final answer.")
+            return "Error: Maximum iterations reached without producing a final answer."
 
 
 if __name__ == "__main__":
@@ -118,3 +147,4 @@ if __name__ == "__main__":
     
     print()
     logging.info(f"Final Answer: {result}")
+    print(f"Final Answer: {result}")
