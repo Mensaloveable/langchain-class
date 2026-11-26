@@ -52,18 +52,9 @@ def get_discounted_price(price: float, discount_tier: str) -> float:
 def run_agent(question: str):
     tools = [get_product_price, get_discounted_price]
     
-    print(f"$$$$$$$$$$$$$get_product_price: {get_product_price}\n\n")
-    
-    logging.info(f"Available tools: {[tool.name for tool in tools]}")
-    print(f"Available tools: {[tool.name for tool in tools]}")
-
     tools_dict = {tool.name: tool for tool in tools}
-    print(f"$$$$$$$$$$$$$tools_dict: {tools_dict}\n\n")
-    
     llm = init_chat_model(f"ollama: {MODEL}", temperature=0.0)
     llm_with_tools = llm.bind_tools(tools)
-    
-    logging.info(f"~~~~~~Question~~~~~~: {question}")
     
     messages = [
         SystemMessage(
@@ -87,20 +78,18 @@ def run_agent(question: str):
         ),
         HumanMessage(content=question),
     ]
-    
+
     for iteration in range(MAX_ITERATIONS):
         print(f"\n--- Iteration {iteration + 1} ---")
-        
+
         ai_message = llm_with_tools.invoke(messages)
-        
+
         # Add the assistant's response to the message history
         messages.append(ai_message)
-        print(f"~~~~~~~Message: {messages}")
-        print('#######################################################################################\n\n')
-        
+
         tool_calls = ai_message.tool_calls
         print(f"~~~~~~~tool_calls: {tool_calls}\n\n")
-        
+
         # If the AI has no tool calls, it means it has generated a final answer
         if not tool_calls:
             print("No tool call detected. Final answer:")
